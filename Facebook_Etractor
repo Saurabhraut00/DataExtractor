@@ -1,0 +1,78 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+import time
+from bs4 import BeautifulSoup
+from openpyxl import load_workbook
+
+profile_ids = instahandle
+
+base_url = 'https://www.facebook.com/{}/about'
+excel_file_path = 'facebook_profiles_20_output_new_1.xlsx'
+driver = webdriver.Chrome()
+data = []
+try:
+    for profile_id in profile_ids:
+        url = base_url.format(profile_id)
+        try:
+            driver.get(url)
+
+            time.sleep(5) 
+
+            try:
+                close_button = driver.find_element(By.XPATH, "//div[@aria-label='Close']")
+                close_button.click()
+            except Exception as e:
+                print(f"No pop-up detected or different structure: {e}")
+
+            page_source = driver.page_source
+            soup = BeautifulSoup(page_source, 'html.parser')
+
+            categories = soup.find_all('span', dir='auto', class_='x193iq5w')
+            category_text = ''
+            for category in categories:
+                if "Categories" in category.get_text():
+                    category_text = category.find_next('span', dir='auto').get_text()
+                    break
+            print(f"Profile ID: {profile_id} - Category: {category_text}")
+
+            websites = []
+            website_spans = soup.find_all('span', class_='x193iq5w', dir='auto')
+            for span in website_spans:
+                if span.find('a') and 'http' in span.find('a')['href']:
+                    websites.append(span.find('a')['href'])
+            print(f"Profile ID: {profile_id} - Websites: {websites}")
+
+            social_links = []
+            social_spans = soup.find_all('span', class_='x193iq5w', dir='auto')
+            for span in social_spans:
+                if span.find('a') and 'instagram.com' in span.find('a')['href']:
+                    social_links.append(span.find('a')['href'])
+            print(f"Profile ID: {profile_id} - Social Links: {social_links}")
+            
+            data.append({
+            'Profile ID': profile_id,
+            'Category': category_text,
+            'Websites': ', '.join(websites),
+            'Social Links': ', '.join(social_links)
+            })
+
+        except Exception as e:
+            print(f"An error occurred while processing Profile ID {profile_id}: {e}")
+
+finally:
+
+    driver.quit()
+
+df = pd.DataFrame(data)
+
+try:
+    book = load_workbook(excel_file_path)
+    writer = pd.ExcelWriter(excel_file_path, engine='openpyxl')
+    writer.book = book
+    writer.sheets = {ws.title: ws for ws in book.worksheets}
+    df.to_excel(writer, index=False, header=False, startrow=writer.sheets['Sheet1'].max_row, sheet_name='Sheet1')
+    writer.save()
+    print("Data appended successfully.")
+except FileNotFoundError:
+    df.to_excel(excel_file_path, index=False)
+    print("Excel file created and data written successfully.")
