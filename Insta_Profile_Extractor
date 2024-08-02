@@ -1,0 +1,71 @@
+import requests
+from bs4 import BeautifulSoup
+import re
+import pandas as pd
+
+def get_instagram_data(username):
+    profile_url = f'https://www.instagram.com/{username}/'
+
+    response = requests.get(profile_url)
+    
+    if response.status_code != 200:
+        print(f"Failed to fetch page for {username}")
+        return None
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    try:
+        bio = soup.find('meta', {'name': 'description'})
+        og_title_tag = soup.find('meta', property='og:title')
+        og_title = og_title_tag['content'] if og_title_tag else 'Not found'
+        og_description_tag = soup.find('meta', property='og:description')
+        og_description = og_description_tag['content'] if og_description_tag else "Description not found"
+        media = soup.find_all('meta', property='og:image') + soup.find_all('meta', property='og:video')
+        media_urls = [m['content'] for m in media if 'content' in m.attrs]
+        metaa_tag = soup.find('meta', property='og:image:alt')
+        image_alt_text = metaa_tag['content'] if metaa_tag else 'Not Found'
+        meta_tag = soup.find('meta', property='og:description')
+        
+        
+        if meta_tag:
+            content = meta_tag['content']
+            followers_count = re.search(r'(\d+(?:,\d+)*) Followers', content)
+            following_count = re.search(r'(\d+(?:,\d+)*) Following', content)
+            posts_count = re.search(r'(\d+(?:,\d+)*) Posts', content)
+            
+            followers_count = soup.find('meta', property='og:description')['content'].split(' ')[0]
+            following_count = following_count.group(1).replace(',', '') if following_count else 'N/A'
+            posts_count = posts_count.group(1).replace(',', '') if posts_count else 'N/A'
+            
+            return {
+                'Username': username,
+                'Profile URL': profile_url,
+                'Followers': followers_count,
+                'Following': following_count,
+                'Posts': posts_count,
+                'Description':og_description,
+                'Title':og_title,
+                'Bio':bio.get('content') if bio else 'Not found',
+                'Media URLs': media_urls
+            }
+        else:
+            print("Meta tag with property 'og:description' not found.")
+            return None
+    
+    except Exception as e:
+        print(f"Error processing data for {username}: {e}")
+        return None
+
+usernames = instahandle
+data = []
+
+for username in usernames:
+    profile_data = get_instagram_data(username)
+    if profile_data:
+        data.append(profile_data)
+
+df = pd.DataFrame(data)
+print(df)
+
+
+df.to_excel("New_instagram_profiles_20_changed_client_1.xlsx", index=False)
